@@ -152,7 +152,7 @@ int main(int argc, char *argv[]){
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-	MPI_COMM_size(MPI_COMM_WORLD, &num_proc);
+	MPI_Comm_size(MPI_COMM_WORLD, &num_proc);
 
 	omp_set_nested(true);
 
@@ -240,8 +240,8 @@ int main(int argc, char *argv[]){
 			// enviando um chunk para cada processo
 			MPI_Scatterv(&A[i][j+1], sendcounts, displs, MPI_DOUBLE, NULL, size_chunk+1, MPI_DOUBLE, root, MPI_COMM_WORLD);
 			
-			scater linha
-			gather nova linha
+			// scater linha
+			// gather nova linha
 
 			// Atualizando o valor do pivô. O valor do pivô é 1 após a divisão.
 			A[i][j] = 1.0;
@@ -263,11 +263,11 @@ int main(int argc, char *argv[]){
 
 			double *recvbuf = (double*) malloc(size_chunk * sizeof(double));
 
-			MPI_Scatterv(NULL, )
+			// MPI_Scatterv(NULL, )
 
-			scater linha
-			dividir
-			gather nova linha
+			// scater linha
+			// dividir
+			// gather nova linha
 		}
 
 		// Eliminando todas as outras entradas da j-ésima coluna.
