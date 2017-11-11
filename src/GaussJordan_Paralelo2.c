@@ -12,8 +12,11 @@
 #define true 1
 #define false 0
 
+#define NUM_THREADS 2
 
-
+#define MATRIX_PATH "input/matriz5.txt"
+#define	VECTOR_PATH "input/vetor5.txt"
+#define RESULT_PATH "resultado5.txt"
 
 
 
@@ -30,17 +33,11 @@ void print_matrix(double *A, int m, int n){
 	}
 }
 
-/* Aloca uma matriz de doubles MxN. */
+/* Aloca uma matriz de doubles MxN em um vetor. */
 double *malloc_matrix(int m, int n){
 	double *A;
-	int i;
 
 	A = (double *) malloc(m * n * sizeof(double));
-	// A = (double **)malloc(m * sizeof(double *));
-
-	// for (i = 0; i < m; i++){
-	// 	A[i] = (double *)malloc(n * sizeof(double));
-	// }
 
 	return A;
 }
@@ -73,7 +70,7 @@ double *read_augmented_matrix(int *m, int *n){
 	*m = *n = 0;
 
 	// Abrindo o arquivo com a matriz A.
-	fp = fopen("input/matriz5.txt", "r");
+	fp = fopen(MATRIX_PATH, "r");
 
 	// Lendo todas as linhas do arquivo. Obtendo o número M de linhas da matriz.
 	do{
@@ -110,7 +107,7 @@ double *read_augmented_matrix(int *m, int *n){
 	free(length);
 
 	// Abrindo o arquivo com o vetor b.
-	fp = fopen("input/vetor5.txt", "r");
+	fp = fopen(VECTOR_PATH, "r");
 
 	// Lendo os valores do vetor b direto para a última coluna (coluna n + 1) da Matriz Aumentada.
 	for (i = 1; i <= *m; i++){
@@ -128,7 +125,7 @@ void print_solution(double *A, int m, int n){
 	FILE *fp;
 	int i;
 
-	fp = fopen("resultado5.txt", "w");
+	fp = fopen(RESULT_PATH, "w");
 
 	for (i = 1; i <= m; i++){
 		fprintf(fp, "%.3lf\n", A[i*(n+2) + n+1]);
@@ -154,7 +151,7 @@ int main(int argc, char *argv[]){
 	// Obtendo a Matriz Aumentada.
 	if (my_rank == 0) {
 		A = read_augmented_matrix(&m, &n);
-		print_matrix(A, m, n);
+		// print_matrix(A, m, n);
 
 		// Recuperando o tempo inicial.
 		s = omp_get_wtime();
@@ -163,7 +160,6 @@ int main(int argc, char *argv[]){
 	MPI_Bcast(&m, 1, MPI_INT, root, MPI_COMM_WORLD);
 	MPI_Bcast(&n, 1, MPI_INT, root, MPI_COMM_WORLD);
 	if(my_rank != 0){
-		// Aparentemente precisa estar alocado para funcionar (não sabemos o porque D:)
 		A = malloc_matrix(m + 1, n + 2);
 	}
 
@@ -175,21 +171,19 @@ int main(int argc, char *argv[]){
 			while (j <= n + 1 && A[i*(n+2)+j] == 0.0){
 				// Buscando uma linha abaixo de A[i][j] tal que A[k][j] != 0.
 				p = 0;
-				// #pragma omp parallel for default(shared) private(k) reduction(max: p) num_threads(2)
+				#pragma omp parallel for default(shared) private(k) reduction(max: p) num_threads(NUM_THREADS)
 				for (k = i + 1; k <= m; k++){
 					if (A[k*(n+2)+j] == 0.0){
 						p = 0;
 					}
 					else{
 						p = k;
-						break;
+						// break;
 					}
 				}
 
 				// Checando se um pivô foi encontrado.
 				if (p > 0){ // Se uma linha foi encontrada.
-					// swap(A + i*(n+2), A + p*(n+2), sizeof(double *));
-					// printf("swapou %d e %d\n", i, p);
 					for(k = 0; k < n+2; k++){
 						swap(&A[i*(n+2)+k], &A[p*(n+2)+k], sizeof(double));
 					}
@@ -199,6 +193,7 @@ int main(int argc, char *argv[]){
 				}
 			}
 
+			// Informando para os demais processos os valores do i,j, que podem ser modificados somente pelo processo 0
 			MPI_Bcast(&i, 1, MPI_INT, root, MPI_COMM_WORLD);
 			MPI_Bcast(&j, 1, MPI_INT, root, MPI_COMM_WORLD);
 
@@ -215,6 +210,7 @@ int main(int argc, char *argv[]){
 
 		}
 
+		// Recebendo i,j
 		if(my_rank != 0){
 			MPI_Bcast(&i, 1, MPI_INT, root, MPI_COMM_WORLD);
 			MPI_Bcast(&j, 1, MPI_INT, root, MPI_COMM_WORLD);
@@ -224,51 +220,45 @@ int main(int argc, char *argv[]){
 			break;
 		}
 
-		// MPI_Barrier(MPI_COMM_WORLD);
-
-		// Enviando o pivot para todos os processos
-		// if(my_rank == 0) printf("Enviando o pivot %.1lf\n", pivot);
-		// if(my_rank > 0) printf("Esperando o pivot...\n");
+		// Enviando o pivot para todos os processos.
 		MPI_Bcast(&pivot, 1, MPI_DOUBLE, root, MPI_COMM_WORLD);
-		// if(my_rank != 0) printf("Recebendo o pivot %.1lf\n", pivot);
 
-
-		// Realizando scatter para dividir a linha entre os processos e realizar a divisão pelo pivot
-
+		// Realizando scatter para dividir a linha entre os processos e realizar a divisão pelo pivot.
 		int num_elements, chunk_size, remainder, *sendcounts, *displs, sum;
-		// numero de elementos serem divididos pelo pivot
+		// Numero de elementos serem divididos pelo pivot .
 		num_elements = n-j+1;
-		// tamanho de cada chunk
+		// Tamanho de cada chunk .
 		chunk_size = num_elements/num_proc;
-		// numero de elementos que sobram ao dividir o numero de elementos pelo numero de chunks
+		// Número de elementos que sobram ao dividir o numero de elementos pelo numero de chunks.
 		remainder = num_elements % num_proc;			
-		// vetor com o tamanho dos chunks
+		// Vetor com o tamanho de cada chunk.
 		sendcounts = (int*) calloc (num_proc, sizeof(int));
-		// vetor com as posicoes onde cada chuk comeca
+		// Vetor com as posicoes onde cada chuk começa.
 		displs = (int*) calloc (num_proc+1, sizeof(int));
-		// Vetor que receberá os valores
+		// Vetor que receberá os valores.
 		double *rcvbuf = (double*) malloc((chunk_size+1) * sizeof(double));
 
-		// os 'remainder' primeiros chunks terao um elementos a mais que os demais
+		//  Preenchendo o vetor de sendcounts com o tamanho de cada chunk os primeiros chunks
+		//		terao um elemento a mais, para realizar o balanceamento de carga.
 		sum = 1;
 		for(k = 0; k < remainder; k++){
 			sendcounts[k] = chunk_size+1;
 			displs[k] = sum;
 			sum += sendcounts[k];
 		}
-		// os demais chunks terao 'chunk_size' elementos
+		// Os demais chunks terao 'chunk_size' elementos.
 		for(k = remainder; k < num_proc; k++){
 			sendcounts[k] = chunk_size;
 			displs[k] = sum;
 			sum += sendcounts[k];
 		}
 
-		// Enviando um chunk para cada processo
+		// Enviando um chunk para cada processo por meio do Scatter.
 		if(my_rank < num_elements){
 			MPI_Scatterv(&A[i*(n+2)+j], sendcounts, displs, MPI_DOUBLE, rcvbuf, chunk_size+1, MPI_DOUBLE, root, MPI_COMM_WORLD);
 					
 			// Dividindo a i-ésima linha pelo pivô A[i][j].
-			#pragma omp parallel for default(shared) private(k) num_threads(2)
+			#pragma omp parallel for default(shared) private(k) num_threads(NUM_THREADS)
 			for (k = 0; k < sendcounts[my_rank]; k++){
 				rcvbuf[k] /= pivot;
 			}
@@ -279,111 +269,84 @@ int main(int argc, char *argv[]){
 		}
 
 
-		// // Liberando memória alocada.
-
-		// // Enviando a linha do pivot para todos processos.
-		// if(my_rank == 0){
-		// 	MPI_Bcast(A+i*(n+2), n+2, MPI_DOUBLE, root, MPI_COMM_WORLD);
-		// } else {
-		// 	free(rcvbuf);
-		// 	rcvbuf = (double *) malloc (sizeof(double)*(n+2));
-		// 	MPI_Bcast(rcvbuf, n+2, MPI_DOUBLE, root, MPI_COMM_WORLD);
-		// }
-		// int tag = 0;
-		// MPI_Status status;
-		
-		// chunk_size = (m+1) / num_proc;
-		 
-		// remainder = (m+1) % num_proc;
-		
-		// sum = 0;
-		
-		// for(k = 0; k < num_proc; k++){
-		// 	if(k < remainder){
-		// 		sendcounts[k] = (chunk_size + 1) * (n+2);
-		// 	} else {
-		// 		sendcounts[k] = chunk_size * (n+2);
-		// 	}
-		// 	displs[k] = sum;
-		// 	sum += sendcounts[k];
-		// }
-		// displs[k] = sum;
-
-		// MPI_Scatterv(A, sendcounts, displs, MPI_DOUBLE, A, (chunk_size + 1) * (n+2), MPI_DOUBLE, root, MPI_COMM_WORLD);
-
-		// // printf("(%d)rcvbuf = ", my_rank);
-		// // for(k = 0; k < n+2; k++){
-		// // 	printf("%.1lf ", rcvbuf[k]);
-		// // }
-		// // printf("\n");
-
-		// // Para todos processos, subtraimos as linhas de seus chunks
-		// if(my_rank == 0){
-		// 	int lines_per_chunk = sendcounts[my_rank]/(n+2);
-		// 	for (k = 1; k <= lines_per_chunk; k++){
-		// 		// Se não for a i-ésima linha (linha do pivô) e possui entrada A[k][j] != 0.
-		// 		if (k != i && A[k*(n+2)+j] != 0.0){
-		// 			// Subtraindo a linha i da linha k.
-		// 			// #pragma omp parallel for default(shared) private(l) num_threads(2)
-		// 			for (l = j + 1; l <= n + 1; l++){
-		// 				A[k*(n+2)+l] -= A[k*(n+2)+j] * A[i*(n+2)+l];
-		// 			}
-
-		// 			// Atualizando o valor de A[k][j]. O valor de A[k][j] é 0 após a subtração.
-		// 			A[k*(n+2)+j] = 0.0;
-		// 		}
-		// 	}
-		// } else {
-		// 	int lines_per_chunk = sendcounts[my_rank]/(n+2);
-		// 	for(k = 0; k < lines_per_chunk; k++){
-		// 		int line = displs[my_rank]/(n+2) + k; // Linha real da matriz A
-
-		// 		if(line != i && A[k*(n+2)+j] != 0){
-		// 			// #pragma omp parallel for default(shared) private(l) num_threads(2)
-		// 			for (l = j + 1; l <= n + 1; l++){
-		// 				A[k*(n+2)+l] -= A[k*(n+2)+j] * rcvbuf[l];
-		// 			}
-		// 			A[k*(n+2)+j] = 0.0;
-		// 		}
-
-		// 	}		
-		// }
-
-		// MPI_Gatherv(A, sendcounts[my_rank], MPI_DOUBLE, A, sendcounts, displs, MPI_DOUBLE, root, MPI_COMM_WORLD);
-
-		free(displs);
-		free(sendcounts);
-		free(rcvbuf);
-
-
+		// Enviando a linha do pivot para todos processos.
 		if(my_rank == 0){
-			// Eliminando todas as outras entradas da j-ésima coluna.
-			for (k = 1; k <= m; k++){
+			MPI_Bcast(A+i*(n+2), n+2, MPI_DOUBLE, root, MPI_COMM_WORLD);
+		} else {
+			free(rcvbuf);
+			rcvbuf = (double *) malloc (sizeof(double)*(n+2));
+			MPI_Bcast(rcvbuf, n+2, MPI_DOUBLE, root, MPI_COMM_WORLD);
+		}
+		
+
+		// Calculando novos valores do chunk para realizar a subtração das linhas
+		chunk_size = (m+1) / num_proc;
+		 
+		remainder = (m+1) % num_proc;
+		
+		sum = 0;
+		for(k = 0; k < num_proc; k++){
+			if(k < remainder){
+				sendcounts[k] = (chunk_size + 1) * (n+2);
+			} else {
+				sendcounts[k] = chunk_size * (n+2);
+			}
+			displs[k] = sum;
+			sum += sendcounts[k];
+		}
+		displs[k] = sum;
+
+		//  Realizando Scatter para dividir as linhas da matriz entre os processos
+		MPI_Scatterv(A, sendcounts, displs, MPI_DOUBLE, A, (chunk_size + 1) * (n+2), MPI_DOUBLE, root, MPI_COMM_WORLD);
+
+		// Para todos processos, subtraimos as linhas de seus chunks
+		if(my_rank == 0){
+			// No processo my_rank == 0, os valores da matriz A estão distribuidos da forma real, então
+			// 		a subtração é feita utilizando os indices reais.
+			int lines_per_chunk = sendcounts[my_rank]/(n+2);
+			for (k = 1; k <= lines_per_chunk; k++){
 				// Se não for a i-ésima linha (linha do pivô) e possui entrada A[k][j] != 0.
 				if (k != i && A[k*(n+2)+j] != 0.0){
 					// Subtraindo a linha i da linha k.
-					// #pragma omp parallel for default(shared) private(l) num_threads(2)
+					#pragma omp parallel for default(shared) private(l) num_threads(NUM_THREADS)
 					for (l = j + 1; l <= n + 1; l++){
-						/* 	j = coluna do pivo
-							i = linha do pivo	
-
-							k = linha atual
-							l = percorre a linha
-						*/
 						A[k*(n+2)+l] -= A[k*(n+2)+j] * A[i*(n+2)+l];
 					}
-
 					// Atualizando o valor de A[k][j]. O valor de A[k][j] é 0 após a subtração.
 					A[k*(n+2)+j] = 0.0;
 				}
 			}
+		} else {
+			// Nos demais processos, a matriz A contém apenas as linhas que aquele processo é responsável, e a linha 
+			// 		do pivot se encontra no rcvbuf.
+			int lines_per_chunk = sendcounts[my_rank]/(n+2);
+			for(k = 0; k < lines_per_chunk; k++){
+				int line = displs[my_rank]/(n+2) + k; // Linha real da matriz A
+
+				if(line != i && A[k*(n+2)+j] != 0){
+					#pragma omp parallel for default(shared) private(l) num_threads(NUM_THREADS)
+					for (l = j + 1; l <= n + 1; l++){
+						A[k*(n+2)+l] -= A[k*(n+2)+j] * rcvbuf[l];
+					}
+					A[k*(n+2)+j] = 0.0;
+				}
+
+			}		
 		}
+
+		// Usamos gatherv para reunir as linhas na matriz original A do processo 0.
+		MPI_Gatherv(A, sendcounts[my_rank], MPI_DOUBLE, A, sendcounts, displs, MPI_DOUBLE, root, MPI_COMM_WORLD);
+
+		// Liberando memória dos vetores auxiliares.
+		free(displs);
+		free(sendcounts);
+		free(rcvbuf);
 	}
 
 	if (my_rank == 0){
 		// Imprimindo a Matriz Aumentada final.
-		printf("\nMatriz Aumentada final:\n");
-		print_matrix(A, m, n);
+		// printf("\nMatriz Aumentada final:\n");
+		// print_matrix(A, m, n);
 		// Recuperando o tempo final.
 		t = omp_get_wtime();
 		printf("Tempo: %.5lfs\n", t - s);
