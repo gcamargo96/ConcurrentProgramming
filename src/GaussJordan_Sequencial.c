@@ -74,7 +74,7 @@ double **read_augmented_matrix(int *m, int *n){
 	*m = *n = 0;
 
 	// Abrindo o arquivo com a matriz A.
-	fp = fopen("matriz5.txt", "r");
+	fp = fopen("../input/matriz4.txt", "r");
 
 	// Lendo todas as linhas do arquivo. Obtendo o número M de linhas da matriz.
 	do{
@@ -111,7 +111,7 @@ double **read_augmented_matrix(int *m, int *n){
 	free(length);
 
 	// Abrindo o arquivo com o vetor b.
-	fp = fopen("vetor5.txt", "r");
+	fp = fopen("../input/vetor4.txt", "r");
 
 	// Lendo os valores do vetor b direto para a última coluna (coluna n + 1) da Matriz Aumentada.
 	for (i = 1; i <= *m; i++){
@@ -129,7 +129,7 @@ void print_solution(double **A, int m, int n){
 	FILE *fp;
 	int i;
 
-	fp = fopen("resultado5.txt", "w");
+	fp = fopen("resultado4.txt", "w");
 
 	for (i = 1; i <= m; i++){
 		fprintf(fp, "%.3lf\n", A[i][n + 1]);
@@ -165,6 +165,8 @@ int main(int argc, char *argv[]){
 
 			// Checando se um pivô foi encontrado.
 			if (k <= m){ // Se uma linha foi encontrada.
+				// printf("VAI SWAPAR %d com %d na coluna %d\n", i, k, j);
+					// int buceta; scanf("%d", &buceta);
 				swap(A + i, A + k, sizeof(double *));
 			}
 			else{ // Se uma linha não foi encontrada.
@@ -202,11 +204,11 @@ int main(int argc, char *argv[]){
 
 	// Recuperando o tempo inicial.
 	t = omp_get_wtime();
-	printf("Tempo: %.5lfs\n", t - s);
 
 	// Imprimindo a Matriz Aumentada final.
-	// printf("\nMatriz Aumentada final:\n");
-	// print_matrix(A, m, n);
+	printf("\nMatriz Aumentada final:\n");
+	print_matrix(A, m, n);
+	printf("Tempo: %.5lfs\n", t - s);
 
 	// Imprimindo a solução em um arquivo.
 	print_solution(A, m, n);
