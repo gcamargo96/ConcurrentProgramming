@@ -1,8 +1,22 @@
-f = GaussJordan_Paralelo2
-all:
-	mpicc src/$(f).c -o $(f) -g -Wall -fopenmp
+FILE = GaussJordan_Paralelo
+FILES = GaussJordan_Sequencial
+NP = 2
+
+SRCDIR = src
+BINDIR = bin
+
+par:
+	mpicc $(SRCDIR)/$(FILE).c -o $(BINDIR)/$(FILE) -g -Wall -fopenmp
+
+seq:
+	gcc $(SRCDIR)/$(FILES).c -o $(BINDIR)/$(FILES) -g -Wall -fopenmp
+
 run:
-	mpiexec -np 2 $(f)
+	mpiexec -np $(NP) $(BINDIR)/$(FILE)
+
+runs:
+	./$(BINDIR)/$(FILES)
+
 debug:
-	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(f)
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(FILE)
  

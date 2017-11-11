@@ -8,6 +8,12 @@
 #include <string.h>
 #include <omp.h>
 
+
+#define MATRIX_PATH "input/matriz1.txt"
+#define	VECTOR_PATH "input/vetor1.txt"
+#define RESULT_PATH "output/resultado1.txt"
+
+
 /* Imprime a matriz aumentada. */
 void print_matrix(double **A, int m, int n){
 	int i, j;
@@ -74,7 +80,7 @@ double **read_augmented_matrix(int *m, int *n){
 	*m = *n = 0;
 
 	// Abrindo o arquivo com a matriz A.
-	fp = fopen("../input/matriz2.txt", "r");
+	fp = fopen(MATRIX_PATH, "r");
 
 	// Lendo todas as linhas do arquivo. Obtendo o número M de linhas da matriz.
 	do{
@@ -111,7 +117,7 @@ double **read_augmented_matrix(int *m, int *n){
 	free(length);
 
 	// Abrindo o arquivo com o vetor b.
-	fp = fopen("../input/vetor2.txt", "r");
+	fp = fopen(VECTOR_PATH, "r");
 
 	// Lendo os valores do vetor b direto para a última coluna (coluna n + 1) da Matriz Aumentada.
 	for (i = 1; i <= *m; i++){
@@ -129,7 +135,7 @@ void print_solution(double **A, int m, int n){
 	FILE *fp;
 	int i;
 
-	fp = fopen("resultado2.txt", "w");
+	fp = fopen(RESULT_PATH, "w");
 
 	for (i = 1; i <= m; i++){
 		fprintf(fp, "%.3lf\n", A[i][n + 1]);
