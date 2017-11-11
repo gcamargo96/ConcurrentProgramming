@@ -74,7 +74,7 @@ double **read_augmented_matrix(int *m, int *n){
 	*m = *n = 0;
 
 	// Abrindo o arquivo com a matriz A.
-	fp = fopen("../input/matriz4.txt", "r");
+	fp = fopen("../input/matriz2.txt", "r");
 
 	// Lendo todas as linhas do arquivo. Obtendo o número M de linhas da matriz.
 	do{
@@ -111,7 +111,7 @@ double **read_augmented_matrix(int *m, int *n){
 	free(length);
 
 	// Abrindo o arquivo com o vetor b.
-	fp = fopen("../input/vetor4.txt", "r");
+	fp = fopen("../input/vetor2.txt", "r");
 
 	// Lendo os valores do vetor b direto para a última coluna (coluna n + 1) da Matriz Aumentada.
 	for (i = 1; i <= *m; i++){
@@ -129,7 +129,7 @@ void print_solution(double **A, int m, int n){
 	FILE *fp;
 	int i;
 
-	fp = fopen("resultado4.txt", "w");
+	fp = fopen("resultado2.txt", "w");
 
 	for (i = 1; i <= m; i++){
 		fprintf(fp, "%.3lf\n", A[i][n + 1]);

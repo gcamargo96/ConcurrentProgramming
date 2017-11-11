@@ -124,14 +124,14 @@ double *read_augmented_matrix(int *m, int *n){
 }
 
 /* Imprime a solução do sistema linear Ax = b em um arquivo. */
-void print_solution(double **A, int m, int n){
+void print_solution(double *A, int m, int n){
 	FILE *fp;
 	int i;
 
 	fp = fopen("resultado5.txt", "w");
 
 	for (i = 1; i <= m; i++){
-		fprintf(fp, "%.3lf\n", A[i][n + 1]);
+		fprintf(fp, "%.3lf\n", A[i*(n+2) + n+1]);
 	}
 
 	fclose(fp);
@@ -182,6 +182,7 @@ int main(int argc, char *argv[]){
 					}
 					else{
 						p = k;
+						break;
 					}
 				}
 
@@ -198,11 +199,15 @@ int main(int argc, char *argv[]){
 				}
 			}
 
+			MPI_Bcast(&i, 1, MPI_INT, root, MPI_COMM_WORLD);
+			MPI_Bcast(&j, 1, MPI_INT, root, MPI_COMM_WORLD);
+
 			// Não há mais pivôs.
 			if (j > n + 1){
 				break;
 			}
 
+			// printf("(%d) pivot encontrado na posicao %d,%d\n", my_rank, i, j);
 			pivot = A[i*(n+2)+j];
 
 			// Atualizando o valor do pivô. O valor do pivô é 1 após a divisão.
@@ -210,9 +215,23 @@ int main(int argc, char *argv[]){
 
 		}
 
+		if(my_rank != 0){
+			MPI_Bcast(&i, 1, MPI_INT, root, MPI_COMM_WORLD);
+			MPI_Bcast(&j, 1, MPI_INT, root, MPI_COMM_WORLD);
+		}
+
+		if (j > n + 1){
+			break;
+		}
+
+		// MPI_Barrier(MPI_COMM_WORLD);
 
 		// Enviando o pivot para todos os processos
+		// if(my_rank == 0) printf("Enviando o pivot %.1lf\n", pivot);
+		// if(my_rank > 0) printf("Esperando o pivot...\n");
 		MPI_Bcast(&pivot, 1, MPI_DOUBLE, root, MPI_COMM_WORLD);
+		// if(my_rank != 0) printf("Recebendo o pivot %.1lf\n", pivot);
+
 
 		// Realizando scatter para dividir a linha entre os processos e realizar a divisão pelo pivot
 
@@ -258,6 +277,7 @@ int main(int argc, char *argv[]){
 			MPI_Gatherv(rcvbuf, sendcounts[my_rank], MPI_DOUBLE, &A[i*(n+2)+j], sendcounts, displs, MPI_DOUBLE, root, MPI_COMM_WORLD);
 
 		}
+
 
 		// // Liberando memória alocada.
 
@@ -368,7 +388,7 @@ int main(int argc, char *argv[]){
 		t = omp_get_wtime();
 		printf("Tempo: %.5lfs\n", t - s);
 		// Imprimindo a solução em um arquivo.
-		// print_solution(A, m, n);
+		print_solution(A, m, n);
 		// Liberando a memória alocada para a Matriz Aumentada.
 		free(A);
 	}
