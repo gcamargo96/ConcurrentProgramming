@@ -24,13 +24,18 @@ typedef struct{
 	int row;
 } pair;
 
+/* converte a posicao de uma matriz 2d para a posicao na representacao por vetor */
+int get_id(int n, int i, int j){
+	return i * (n+1) + j;
+}
+
 /* Imprime a matriz aumentada. */
 void print_matrix(double *A, int m, int n){
 	int i, j;
 
 	for (i = 0; i < m; i++){
 		for (j = 0; j < n + 1; j++){
-			printf("%.0lf ", A[i*(n+1) + j]);
+			printf("%.0lf ", A[get_id(n,i,j)]);
 		}
 
 		printf("\n");
@@ -98,7 +103,7 @@ double *read_augmented_matrix(int *m, int *n){
 	// Obtendo os valores da matriz A.
 	for (i = 0; i < *m; i++){
 		for (j = 0, offset = 0; j < *n; j++, offset += len + 1){
-			sscanf(line[i] + offset, "%lf%n", &A[i*(*n+1)+j], &len);
+			sscanf(line[i] + offset, "%lf%n", &A[get_id(*n,i,j)], &len);
 		}
 	}
 
@@ -115,7 +120,7 @@ double *read_augmented_matrix(int *m, int *n){
 
 	// Lendo os valores do vetor b direto para a última coluna (coluna n + 1) da Matriz Aumentada.
 	for (i = 0; i < *m; i++){
-		fscanf(fp, "%lf", &A[i*(*n+1)+(*n)]);
+		fscanf(fp, "%lf", &A[get_id(*n,i,*n)]);
 	}
 
 	// Fechando o arquivo com o vetor b.
@@ -132,12 +137,13 @@ void print_solution(double *A, int m, int n){
 	fp = fopen(RESULT_PATH, "w");
 
 	for (i = 0; i < m; i++){
-		fprintf(fp, "%.3lf\n", A[i*(n+1) + n]);
+		fprintf(fp, "%.3lf\n", A[get_id(n,i,n)]);
 	}
 
 	fclose(fp);
 }
 
+/* retorna o processo resposavel pela linha cur_row */
 int find_proc(int *start_row, int cur_row, int num_proc){
 	int i = 0;
 	for(i = 0; i < num_proc; i++){
@@ -148,14 +154,15 @@ int find_proc(int *start_row, int cur_row, int num_proc){
 	return 0;
 }
 
+
 int main(int argc, char *argv[]){
 	// variaveis de uso geral
-	int m, n, p, i, j, k, l;
+	int m, n, i, j, k, l;
 	double *A, *subA, s, t;
 
 	// variaveis relacionadas ao MPI
 	int my_rank, num_proc, root = 0, tag = 0;
-	int num_elements, chunk_size, remainder, *sendcounts, *displs, *start_row, *num_rows, sum, sum_rows;
+	int chunk_size, remainder, *sendcounts, *displs, *start_row, *num_rows, sum, sum_rows;
 	pair pivot;
 	MPI_Status status;
 
@@ -185,9 +192,8 @@ int main(int argc, char *argv[]){
 		A = malloc_matrix(m + 1, n + 1);
 	}
 
+	// cada processo ficara responsavel por uma sub-matriz da matriz A
 	subA = malloc_matrix(m + 1, n + 1);
-
-	/////////////////////////////////////////////////////////////////
 
 	// Calculando novos valores do chunk para realizar a subtração das linhas
 	chunk_size = m / num_proc;
@@ -231,45 +237,21 @@ int main(int argc, char *argv[]){
 	//  Realizando Scatter para dividir as linhas da matriz entre os processos
 	MPI_Scatterv(A, sendcounts, displs, MPI_DOUBLE, subA, (chunk_size + 1) * (n+1), MPI_DOUBLE, root, MPI_COMM_WORLD);
 
-	// [DEBUG] imprimindo as linhas de cada processo
-	// for(i = 0; i < num_rows[my_rank]; i++){
-	// 	// printf("num_rows[%d] = %d\n", my_rank, num_rows[my_rank]);
-	// 	for(j = 0; j < n+1; j++){
-	// 		printf("%.1lf ", subA[i*(n+1)+j]);
-	// 	}
-	// 	printf("\n");
-	// }
-
-	////////////////////////////////////////////////////////
-
-	// double pivot = 0;
 	// Eliminação de Gauss-Jordan.
 	for (i = 0, j = 0; i < m && j < n+1; i++, j++){ 
-		// processo responsavel pela linha atual
+		// rank do processo responsavel pela linha atual
 		int cur_rank = find_proc(start_row, i, num_proc);
-		// printf("curr_rank = %d\n", cur_rank);
 
-		// [DEBUG] imprimindo as linhas de cada processo
-		// printf("rank = %d\n", my_rank);
-		// for(k = 0; k < num_rows[my_rank]; k++){
-		// 	// printf("num_rows[%d] = %d\n", my_rank, num_rows[my_rank]);
-		// 	printf("(%d) ", start_row[my_rank]+k);
-		// 	for(int l = 0; l < n+1; l++){
-		// 		printf("%.1lf ", subA[k*(n+1)+l]);
-		// 	}
-		// 	printf("\n");
-		// }
-
-		// int x; scanf("%d", &x);
-
+		// valor que estaria na posicao A[i][j] / linha atual em relacao a sub-matriz a que pertence / linha do pivot em relacao a sub-matriz a que pertence
 		int cur_val, cur_row, pivot_row;
-		if(my_rank == cur_rank){
-			// linha dentro do da sub-matriz
-			cur_row = i - start_row[my_rank];
-			// valor da posicao [i,j] da matriz original
-			cur_val = subA[cur_row*(n+1)+j];
 
-			// printf("cur_row = %d, cur_val = %d\n", cur_row, cur_val);
+		// no processo resposavel pela linha i
+		if(my_rank == cur_rank){
+			// linha em relacao a sub-matriz
+			cur_row = i - start_row[my_rank];
+
+			// valor que estaria na posicao A[i][j]
+			cur_val = subA[cur_row*(n+1)+j];
 		}
 
 
@@ -279,138 +261,139 @@ int main(int argc, char *argv[]){
 
 		// se o valor de A[i][j] for 0, precisamos de um novo pivot
 		if(cur_val == 0){
-			// numero de linhas no processo atual
-			pair local_pivot;
+			pair local_pivot; // variavel temporaria para guardar o maior local para posterior reducao
 			local_pivot.val = 0, local_pivot.row = -1;
 			pivot.val = 0, pivot.row = -1;
+			
 			// encontrando um pivo nao nulo
 			for(k = 0; k < num_rows[my_rank]; k++){
-				// printf("%lf, %d\n", subA[k*(n+1)+j], k);
-				if(fabs(subA[k*(n+1)+j]) > local_pivot.val){
-					local_pivot.val = subA[k*(n+1)+j];
+				// escolhemos o maior valor em modulo
+				if(fabs(subA[get_id(n,k,j)]) > local_pivot.val){
+					local_pivot.val = subA[get_id(n,k,j)];
 					local_pivot.row = start_row[my_rank] + k;
 				}
 			}
 
+			// obtendo o maior valor abaixo de A[i][j] e sua posicao (linha)
 			MPI_Allreduce(&local_pivot, &pivot, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
 
 			// se só há zeros na coluna, aumentamos o j e vamos para a proxima iteracao
 			if(pivot.val == 0){
-				// printf("caiu aqui\n");
-				i--;
-				MPI_Barrier(MPI_COMM_WORLD);
+				i--; // decrementamos o valor de i, pois o for ira incrementa-lo novamente
+				MPI_Barrier(MPI_COMM_WORLD); // sincronizando
 				continue;
 			}
 
-			// printf("pivot = (%lf,%d)\n", pivot.val, pivot.row);
-
-			// procesos que contem a linha do pivot
+			// procesos que contem a linha do pivot em relacao a matriz original
 			int pivot_rank = find_proc(start_row, pivot.row, num_proc);
-			// printf("pivot_rank = %d\n", pivot_rank);
-			
 
+			// se a linha do novo pivo estiver no mesmo chunk que a linha i
 			if(my_rank == cur_rank && cur_rank == pivot_rank){
 				// linha do pivot na sub-matriz
 				pivot_row = pivot.row - start_row[pivot_rank];
+				// linha i na sub-matriz
 				cur_row = i - start_row[my_rank];
 				// trocando as linhas:
-				memcpy(rcvbuf, &subA[cur_row*(n+1)], (n+1) * sizeof(double));
-				memcpy(&subA[cur_row*(n+1)], &subA[pivot_row*(n+1)], (n+1) * sizeof(double));
-				memcpy(&subA[pivot_row*(n+1)], rcvbuf, (n+1) * sizeof(double));
+				memcpy(rcvbuf, &subA[get_id(n,cur_row,0)], (n+1) * sizeof(double));
+				memcpy(&subA[cur_row*(n+1)], &subA[get_id(n,pivot_row,0)], (n+1) * sizeof(double));
+				memcpy(&subA[get_id(n,pivot_row,0)], rcvbuf, (n+1) * sizeof(double));
 			}
-			else{
-				// no processo que contem a linha atual
+			else{ // se a linha do novo pivo e a linha i estiverem em processos diferentes
+				// no processo que contem a linha i
 				if(my_rank == cur_rank){
-					// mando a linha atual para o processo que contem o pivot
-					MPI_Send(&subA[cur_row*(n+1)], n+1, MPI_DOUBLE, pivot_rank, tag, MPI_COMM_WORLD);
+					// mando a linha i para o processo que contem o pivot
+					MPI_Send(&subA[get_id(n,cur_row,0)], n+1, MPI_DOUBLE, pivot_rank, tag, MPI_COMM_WORLD);
 					// recebo a linha do pivot no rcvbuf
 					MPI_Recv(rcvbuf, n+1, MPI_DOUBLE, pivot_rank, tag, MPI_COMM_WORLD, &status);
-					// copio a linha do pivot para a linha atual
-					memcpy(&subA[cur_row*(n+1)], rcvbuf, (n+1) * sizeof(double));
+					// copio a linha do pivot para a linha i
+					memcpy(&subA[get_id(n,cur_row,0)], rcvbuf, (n+1) * sizeof(double));
 				}
 
 				// no processo que contem a linha do pivot
 				if(my_rank == pivot_rank){
 					// descobrindo a linha da sub-matriz em que o pivot esta
 					pivot_row = pivot.row - start_row[pivot_rank];
-					// printf("pivot_row = %d\n", pivot_row);
-					// mando a linha do pivot para o processo que contem a antiga linha atual
-					MPI_Send(&subA[pivot_row*(n+1)], n+1, MPI_DOUBLE, cur_rank, tag, MPI_COMM_WORLD);
-					// recebo a linha atual do processo que a contem
+					// mando a linha do pivot para o processo que contem a linha i
+					MPI_Send(&subA[get_id(n,pivot_row,0)], n+1, MPI_DOUBLE, cur_rank, tag, MPI_COMM_WORLD);
+					// recebo a linha i do processo que a contem
 					MPI_Recv(rcvbuf, n+1, MPI_DOUBLE, cur_rank, tag, MPI_COMM_WORLD, &status);
-					// copio a antiga linha atual para a linha do pivot
-					memcpy(&subA[pivot_row*(n+1)], rcvbuf, (n+1) * sizeof(double));
+					// copio a linha i para a linha do pivot
+					memcpy(&subA[get_id(n,pivot_row,0)], rcvbuf, (n+1) * sizeof(double));
 				}
 			}
 		}
 		
-		// if(j > n){
-		// 	MPI_Barrier(MPI_COMM_WORLD);
-		// 	break;
-		// }
+		// se ja passei por todas as colunas, a matriz ja esta escalonada
+		if(j > n){
+			MPI_Barrier(MPI_COMM_WORLD); // sincronizacao
+			break;
+		}
 
 		// normalizacao: dividindo a linha do pivot pelo valor do pivot
 		if(my_rank == cur_rank){
-			// cur_row = i - start_row[my_rank];
-			// printf("pivot.val = %.1lf\n", pivot.val);
+			// posicao na linha i em relacao a sub-matriz
+			cur_row = i - start_row[my_rank];
+
+			#pragma omp parallel for default(shared) private(k) num_threads(NUM_THREADS)
 			for(k = j+1; k < n+1; k++){
-				subA[cur_row*(n+1)+k] /= pivot.val;
+				subA[get_id(n,cur_row,k)] /= pivot.val;
 			}
-			subA[cur_row*(n+1)+j] = 1.0;
+			subA[get_id(n,cur_row,j)] = 1.0;
 		}
 
-
-
-		// Enviando a linha do pivot para todos processos.
+		// Enviando a linha do pivot para todos processos
 		if(my_rank == cur_rank){
-			MPI_Bcast(&subA[cur_row*(n+1)], n+1, MPI_DOUBLE, cur_rank, MPI_COMM_WORLD);
-			memcpy(rcvbuf, &subA[cur_row*(n+1)], (n+1) * sizeof(double));
-		} else {
+			MPI_Bcast(&subA[get_id(n,cur_row,0)], n+1, MPI_DOUBLE, cur_rank, MPI_COMM_WORLD);
+			// copiando a linha do pivo para o rcvbuf do processo que as contem
+			memcpy(rcvbuf, &subA[get_id(n,cur_row,0)], (n+1) * sizeof(double));
+		} else { // recebendo a linha do pivot
 			MPI_Bcast(rcvbuf, n+1, MPI_DOUBLE, cur_rank, MPI_COMM_WORLD);
-			// printf("linha do pivot = ");
-			// for(k = 0; k < n+1; k++){
-			// 	printf("%.1lf ", rcvbuf[k]);
-			// }
-			// printf("\n");
 		}
 	
-		// if(my_rank == cur_rank){	
-		// 	for(k = 0; k < num_proc; k++){
-		// 		MPI_Send(&subA[cur_row*(n+1)], n+1, MPI_DOUBLE, )
-		// 	}
-		// }
-
+		// realizando a eliminacao:
+		// percorrendo todas as linhas do processo atual
 		for(k = 0; k < num_rows[my_rank]; k++){
+			// linha em relacao a matriz original A 
 			int real_row = start_row[my_rank]+k;
-			if(real_row != i && subA[k*(n+1)+j] != 0.0){
-				// #pragma omp parallel for default(shared) private(l) num_threads(NUM_THREADS)
+			// se nao estivermos na linha i e o valor A[i][j] nao for 0
+			if(real_row != i && subA[get_id(n,k,j)] != 0.0){
+				#pragma omp parallel for default(shared) private(l) num_threads(NUM_THREADS)
 				for (l = j + 1; l < n + 1; l++){
-					subA[k*(n+1)+l] -= subA[k*(n+1)+j] * rcvbuf[l];	
+					// o rcvbuf contem a linha do pivo
+					subA[get_id(n,k,l)] -= subA[get_id(n,k,j)] * rcvbuf[l];	
 				}
 				// Atualizando o valor de A[k][j]. O valor de A[k][j] é 0 após a subtração.
-				subA[k*(n+1)+j] = 0.0;
+				subA[get_id(n,k,j)] = 0.0;
 			}
 		}
 
+		// sincronizando os processos ao final do for
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
 	
-	// Usamos gatherv para reunir todas as sub-matrizes na matriz A do processo 0.
+	// Usamos gatherv para reunir todas as sub-matrizes na matriz A no processo 0.
 	MPI_Gatherv(subA, sendcounts[my_rank], MPI_DOUBLE, A, sendcounts, displs, MPI_DOUBLE, root, MPI_COMM_WORLD);
 
 	if (my_rank == 0){
 		// Imprimindo a Matriz Aumentada final.
 		// printf("\nMatriz Aumentada final:\n");
-		print_matrix(A, m, n);
+		// print_matrix(A, m, n);
 		// Recuperando o tempo final.
 		t = omp_get_wtime();
 		printf("Tempo: %.5lfs\n", t - s);
 		// Imprimindo a solução em um arquivo.
 		print_solution(A, m, n);
 		// Liberando a memória alocada para a Matriz Aumentada.
-		free(A);
 	}
 
+	// liberando a memoria alocada
+	free(A);
+	free(subA);
+	free(rcvbuf);
+	free(sendcounts);
+	free(displs);
+	free(start_row);
+	free(num_rows);
 	MPI_Finalize();
 
 	return 0;
