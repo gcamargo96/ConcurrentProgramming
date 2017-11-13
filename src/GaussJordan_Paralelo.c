@@ -15,9 +15,9 @@
 
 #define NUM_THREADS 2
 
-#define MATRIX_PATH "input/matriz5.txt"
-#define	VECTOR_PATH "input/vetor5.txt"
-#define RESULT_PATH "output/resultado5.txt"
+#define MATRIX_PATH "input/matriz4.txt"
+#define	VECTOR_PATH "input/vetor4.txt"
+#define RESULT_PATH "output/resultado4.txt"
 
 typedef struct{
 	double val;

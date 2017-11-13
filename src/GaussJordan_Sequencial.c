@@ -9,9 +9,9 @@
 #include <omp.h>
 
 
-#define MATRIX_PATH "input/matriz1.txt"
-#define	VECTOR_PATH "input/vetor1.txt"
-#define RESULT_PATH "output/resultado1.txt"
+#define MATRIX_PATH "input/matriz5000.txt"
+#define	VECTOR_PATH "input/vetor5000.txt"
+#define RESULT_PATH "output/resultado5000.txt"
 
 
 /* Imprime a matriz aumentada. */
@@ -212,8 +212,8 @@ int main(int argc, char *argv[]){
 	t = omp_get_wtime();
 
 	// Imprimindo a Matriz Aumentada final.
-	printf("\nMatriz Aumentada final:\n");
-	print_matrix(A, m, n);
+	// printf("\nMatriz Aumentada final:\n");
+	// print_matrix(A, m, n);
 	printf("Tempo: %.5lfs\n", t - s);
 
 	// Imprimindo a solução em um arquivo.
